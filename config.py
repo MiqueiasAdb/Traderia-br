@@ -19,8 +19,29 @@ load_dotenv()
 
 API_KEY = os.getenv("API_KEY", "").strip()
 
-# URL oficial da API-Football v3.
-API_BASE = "https://apiv3.apifootball.com/"
+# API-Sports v3 (api-sports.io) — endpoints /fixtures, /odds...
+API_BASE = os.getenv(
+    "API_BASE",
+    "https://v3.football.api-sports.io",
+).strip()
+
+# Limite diário de requisições do plano (Free = 100/dia,
+# Pro = 7.500/dia). Protege a cota e ativa modo economia.
+API_REQ_DIA_LIMITE = int(
+    os.getenv("API_REQ_DIA_LIMITE", "100")
+)
+
+# ============================================================
+# API LEGADA (apifootball.com) — OPCIONAL
+# ============================================================
+# Chave extra para poupar cota: estatísticas e H2H saem daqui
+# enquanto a chave for válida. Sem ela (ou expirada), o bot usa
+# só a API-Sports automaticamente.
+API2_BASE = os.getenv(
+    "API2_BASE",
+    "https://apiv3.apifootball.com/",
+).strip()
+API2_KEY = os.getenv("API2_KEY", "").strip()
 
 
 # ============================================================
@@ -103,11 +124,26 @@ MONITOR_INTERVALO_MINUTOS = int(
 # créditos/mês grátis). Sem ela, o módulo fica inativo.
 ODDS_API_KEY = os.getenv("ODDS_API_KEY", "").strip()
 
-# Sport key do Brasileirão Série A na The Odds API.
-ODDS_SPORT_KEY = os.getenv(
-    "ODDS_SPORT_KEY",
-    "soccer_brazil_campeonato",
+# Ligas do pré-jogo externo, na ordem de prioridade de gasto.
+# Formato: "Nome|CODIGO_FD|sport_key_oddsapi, ..."
+# (CODIGO_FD = código na football-data.org; vazio = usa
+# eventos da própria The Odds API).
+PREMATCH_LIGAS = os.getenv(
+    "PREMATCH_LIGAS",
+    "Brasileirão Série A|BSA|soccer_brazil_campeonato, "
+    "Premier League|PL|soccer_epl, "
+    "La Liga|PD|soccer_spain_la_liga, "
+    "Serie A (Itália)|SA|soccer_italy_serie_a, "
+    "Bundesliga|BL1|soccer_germany_bundesliga, "
+    "Ligue 1|FL1|soccer_france_ligue_one, "
+    "Championship|ELC|soccer_efl_champ",
 ).strip()
+
+# Orçamento diário de créditos na The Odds API (o plano
+# grátis tem 500/mês — 12/dia ≈ 360/mês, com folga).
+ODDS_CREDITO_DIARIO = int(
+    os.getenv("ODDS_CREDITO_DIARIO", "12")
+)
 
 # Regiões e mercados consultados (cada mercado+região
 # custa 1 crédito por chamada). "btts" pode ser adicionado.
@@ -177,6 +213,16 @@ EV_MINIMO = float(
     os.getenv(
         "EV_MINIMO",
         "0.08",
+    )
+)
+
+# Filtro de sanidade: EV acima disso indica modelo
+# descalibrado (mercado real raramente deixa >50% de
+# valor na mesa). O candidato é descartado.
+EV_SANIDADE_MAXIMA = float(
+    os.getenv(
+        "EV_SANIDADE_MAXIMA",
+        "0.50",
     )
 )
 

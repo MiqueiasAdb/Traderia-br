@@ -217,7 +217,12 @@ class TraderIA:
         if MODO_MONITOR in {"off", "0", "false", "nao", "não"}:
             return False
 
-        return self.scanner.odds_bloqueadas
+        return (
+            self.scanner.odds_bloqueadas
+            or getattr(
+                self.scanner, "cota_esgotada", False
+            )
+        )
 
     def _anunciar_monitor(self) -> None:
         if self.monitor_anunciado:
@@ -558,6 +563,21 @@ class TraderIA:
                     fora,
                 )
 
+            if not jogo.get("_fonte_odds") and getattr(
+                self.scanner, "odds_bloqueadas", False
+            ):
+                # Plano sem odds: sem odd real não há sinal,
+                # então pular direto (poupa cota e tempo).
+                logger.info(
+                    "⏭️ [%s/%s] %s x %s: pulado "
+                    "(odds bloqueadas no plano)",
+                    indice,
+                    len(jogos),
+                    casa,
+                    fora,
+                )
+                continue
+
             try:
                 if jogo.get("_fonte_odds"):
                     # Pré-jogo externo: as odds já vieram com o
@@ -571,8 +591,12 @@ class TraderIA:
                         match_id
                     )
 
-                    stats = self.scanner.buscar_estatisticas(
-                        match_id
+                    stats = (
+                        self.scanner.buscar_estatisticas(
+                            match_id,
+                            casa=casa,
+                            fora=fora,
+                        )
                     )
 
                     h2h = []

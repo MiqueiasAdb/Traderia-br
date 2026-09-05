@@ -19,6 +19,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from config import (
     EV_MINIMO,
+    EV_SANIDADE_MAXIMA,
     MINUTO_MINIMO_PLACAR_EXATO,
     ODD_MAXIMA,
     ODD_MINIMA,
@@ -693,14 +694,27 @@ class Brain:
 
             ev = probabilidade * odd_real - 1
 
-            if ev >= EV_MINIMO:
-                candidatos.append({
-                    "mercado": nome,
-                    "chave": chave,
-                    "probabilidade": probabilidade,
-                    "odd": odd_real,
-                    "ev": ev,
-                })
+            if ev < EV_MINIMO:
+                continue
+
+            if ev > EV_SANIDADE_MAXIMA:
+                # Modelo descalibrado para este jogo
+                # (mercado não deixa tanto valor na mesa).
+                logger.info(
+                    "🧪 EV %.0f%% acima da sanidade — "
+                    "descartado (%s)",
+                    ev * 100,
+                    nome,
+                )
+                continue
+
+            candidatos.append({
+                "mercado": nome,
+                "chave": chave,
+                "probabilidade": probabilidade,
+                "odd": odd_real,
+                "ev": ev,
+            })
 
         # Placar exato somente ao vivo e nos minutos finais.
         if (
@@ -724,7 +738,13 @@ class Brain:
                 ):
                     ev_placar = prob_topo * odd_placar - 1
 
-                    if ev_placar >= EV_MINIMO:
+                    if ev_placar > EV_SANIDADE_MAXIMA:
+                        logger.info(
+                            "🧪 EV de placar exato %.0f%% "
+                            "acima da sanidade — descartado",
+                            ev_placar * 100,
+                        )
+                    elif ev_placar >= EV_MINIMO:
                         candidatos.append({
                             "mercado": (
                                 f"Placar Exato — {placar_topo}"
