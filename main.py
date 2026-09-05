@@ -23,6 +23,7 @@ from brain import Brain, Sinal
 from config import (
     API_KEY,
     API_TIMEZONE,
+    MAX_JOGOS_POR_CICLO,
     MODO_MONITOR,
     MONITOR_INTERVALO_MINUTOS,
     SCAN_INTERVAL_SEGUNDOS,
@@ -502,6 +503,25 @@ class TraderIA:
                 "⚠️ Nenhum jogo elegível neste ciclo"
             )
             return
+
+        # O monitor acima recebeu a lista COMPLETA. Aqui,
+        # a análise (que custa ~1 req de odds por jogo)
+        # fica limitada aos mais prioritários.
+        if len(jogos) > MAX_JOGOS_POR_CICLO:
+            logger.info(
+                "🧮 Análise limitada aos %s jogos mais "
+                "prioritários (de %s) — MAX_JOGOS_POR_CICLO",
+                MAX_JOGOS_POR_CICLO,
+                len(jogos),
+            )
+            jogos = sorted(
+                jogos,
+                key=lambda jogo: not (
+                    self.scanner._eh_prioritario(
+                        jogo
+                    )
+                ),
+            )[:MAX_JOGOS_POR_CICLO]
 
         analisados = 0
         oportunidades = 0

@@ -606,9 +606,7 @@ class Scanner24h:
             if not self._eh_prioritario(j)
         ]
 
-        selecionados = (
-            prioritarios + outros
-        )[:MAX_JOGOS_POR_CICLO]
+        selecionados = prioritarios + outros
 
         self.jogos_analisados_hoje += len(
             selecionados
