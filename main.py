@@ -32,6 +32,7 @@ from config import (
 )
 from scanner import Scanner24h
 from prematch import PreJogoOdds
+from analista_ia import AnalistaIA
 from telegram_bot import NotificadorTelegram
 
 
@@ -117,6 +118,16 @@ class TraderIA:
         self.brain = Brain()
         self.notificador = NotificadorTelegram()
         self.banca = GestorBanca()
+
+        # Analista IA (Nível 2): tese + revisão de sinais.
+        self.analista = None
+
+        try:
+            self.analista = AnalistaIA()
+        except Exception:
+            logger.exception(
+                "❌ Falha ao iniciar o analista IA"
+            )
 
         # Pré-jogo do Brasileirão com odds externas
         # (football-data.org + The Odds API — Plano B).
@@ -685,6 +696,96 @@ class TraderIA:
                     sinal.probabilidade_modelo,
                     sinal.valor_esperado,
                 )
+
+                # ── Nível 2: analista IA ──────────────
+                # Escreve a tese e revisa a sanidade.
+                # A IA NUNCA define números de aposta.
+                if (
+                    self.analista
+                    and self.analista.ativo
+                ):
+                    stats_resumo = {
+                        lado: dict(
+                            list(valores.items())[:6]
+                        )
+                        for lado, valores in (
+                            stats or {}
+                        ).items()
+                        if isinstance(valores, dict)
+                    }
+
+                    odds_snapshot = (
+                        odds[0]
+                        if odds
+                        and isinstance(odds[0], dict)
+                        else {}
+                    )
+
+                    contexto = {
+                        "match_id": match_id,
+                        "jogo": sinal.jogo,
+                        "liga": sinal.liga,
+                        "modo": sinal.modo_analise,
+                        "minuto": sinal.minuto,
+                        "placar": sinal.placar,
+                        "mercado": sinal.mercado,
+                        "odd": sinal.odd_entrada,
+                        "probabilidade_%": round(
+                            sinal.probabilidade_modelo
+                            * 100,
+                            1,
+                        ),
+                        "ev_%": round(
+                            sinal.valor_esperado
+                            * 100,
+                            1,
+                        ),
+                        "confianca_%": sinal.confianca,
+                        "risco": sinal.risco,
+                        "fatores_do_modelo": (
+                            sinal.fatores
+                        ),
+                        "estatisticas": stats_resumo,
+                        "h2h_jogos": len(h2h),
+                        "odds_de_mercado": (
+                            odds_snapshot
+                        ),
+                    }
+
+                    tese_ia = (
+                        self.analista.escrever_tese(
+                            contexto
+                        )
+                    )
+
+                    if tese_ia:
+                        sinal.tese = tese_ia
+
+                    veredito = (
+                        self.analista.revisar(
+                            contexto, sinal.tese
+                        )
+                    )
+
+                    if veredito.get(
+                        "veredito"
+                    ) == "VETA":
+                        logger.warning(
+                            "🚫 Sinal vetado pela IA: %s",
+                            veredito.get("motivo", ""),
+                        )
+                        self.sinais_enviados.add(chave)
+                        continue
+
+                    if veredito.get(
+                        "veredito"
+                    ) == "DUVIDA":
+                        logger.info(
+                            "⚠️ IA com dúvida no sinal "
+                            "(enviado mesmo assim): %s",
+                            veredito.get("motivo", ""),
+                        )
+                # ── fim do analista IA ────────────────
 
                 confirmado = (
                     self.notificador

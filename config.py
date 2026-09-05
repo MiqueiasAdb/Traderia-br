@@ -43,6 +43,29 @@ API2_BASE = os.getenv(
 ).strip()
 API2_KEY = os.getenv("API2_KEY", "").strip()
 
+# ============================================================
+# ANALISTA IA (Nível 2 — opcional, tier grátis do Gemini)
+# ============================================================
+# Chave do Google AI Studio (https://aistudio.google.com).
+# Sem ela, o bot usa a tese template como sempre.
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+
+# Modelo do Gemini (gemini-2.0-flash tem tier gratuito).
+GEMINI_MODELO = os.getenv(
+    "GEMINI_MODELO",
+    "gemini-2.0-flash",
+).strip()
+
+GEMINI_TIMEOUT = int(
+    os.getenv("GEMINI_TIMEOUT", "25")
+)
+
+# Revisão de sanidade antes do envio: on/off.
+GEMINI_REVISAO = os.getenv(
+    "GEMINI_REVISAO",
+    "on",
+).strip().lower()
+
 
 # ============================================================
 # TELEGRAM
