@@ -1,0 +1,5 @@
+requests==2.31.0
+python-telegram-bot==21.3
+websocket-client==1.7.0
+numpy==1.26.3
+python-dotenv==1.0.1
