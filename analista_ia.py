@@ -33,6 +33,7 @@ logger = logging.getLogger("TraderIA")
 class AnalistaIA:
     BASE = "https://generativelanguage.googleapis.com/v1beta"
     CACHE_TTL = 600.0
+    MAX_TENTATIVAS = 3
 
     def __init__(self):
         self.session = requests.Session()
@@ -56,7 +57,7 @@ class AnalistaIA:
         self._cache: Dict[str, tuple] = {}
 
     # ========================================================
-    # CHAMADA BASE
+    # CHAMADA BASE (com retries para 429/5xx/timeout)
     # ========================================================
 
     def _chamar(
@@ -70,6 +71,10 @@ class AnalistaIA:
             f"generateContent"
         )
 
+        # Modelos "thinking" gastam tokens de raciocínio
+        # antes de responder — para narração simples, o
+        # thinking é desligado (com fallback se o modelo
+        # não suportar o campo).
         corpo = {
             "contents": [
                 {"parts": [{"text": prompt}]}
@@ -77,16 +82,53 @@ class AnalistaIA:
             "generationConfig": {
                 "temperature": 0.4,
                 "maxOutputTokens": max_tokens,
+                "thinkingConfig": {"thinkingBudget": 0},
             },
         }
 
-        try:
-            resposta = self.session.post(
-                url,
-                params={"key": GEMINI_API_KEY},
-                json=corpo,
-                timeout=GEMINI_TIMEOUT,
-            )
+        for tentativa in range(
+            1, self.MAX_TENTATIVAS + 1
+        ):
+            try:
+                resposta = self.session.post(
+                    url,
+                    params={"key": GEMINI_API_KEY},
+                    json=corpo,
+                    timeout=GEMINI_TIMEOUT,
+                )
+
+            except requests.RequestException as erro:
+                logger.warning(
+                    "🤖 Gemini falhou (%s/%s): %s",
+                    tentativa,
+                    self.MAX_TENTATIVAS,
+                    type(erro).__name__,
+                )
+                time.sleep(2.0 * tentativa)
+                continue
+
+            if resposta.status_code in {429, 500, 503}:
+                logger.warning(
+                    "🤖 Gemini HTTP %s (tentativa %s/%s) "
+                    "— aguardando",
+                    resposta.status_code,
+                    tentativa,
+                    self.MAX_TENTATIVAS,
+                )
+                time.sleep(2.0 * tentativa)
+                continue
+
+            if (
+                resposta.status_code == 400
+                and "thinkingConfig" in corpo.get(
+                    "generationConfig", {}
+                )
+            ):
+                # Modelo não suporta o campo: refazer sem ele.
+                corpo["generationConfig"].pop(
+                    "thinkingConfig", None
+                )
+                continue
 
             if resposta.status_code != 200:
                 logger.warning(
@@ -95,37 +137,53 @@ class AnalistaIA:
                 )
                 return None
 
-            dados = resposta.json()
+            try:
+                dados = resposta.json()
+            except ValueError:
+                logger.warning(
+                    "🤖 Gemini: resposta não é JSON"
+                )
+                return None
 
             candidatos = dados.get(
                 "candidates", []
             ) or []
 
-            texto = (
-                (
-                    (candidatos[0] or {})
-                    .get("content", {})
-                    or {}
+            if not candidatos:
+                # blockReason etc.
+                motivo = str(
+                    (
+                        dados.get(
+                            "promptFeedback", {}
+                        )
+                        or {}
+                    ).get("blockReason", "")
                 )
-                .get("parts", [{}])[0]
-                .get("text", "")
-            ) if candidatos else ""
 
-            texto = str(texto).strip()
+                logger.warning(
+                    "🤖 Gemini sem candidatos%s",
+                    f" ({motivo})" if motivo else "",
+                )
+                return None
+
+            texto = ""
+
+            partes = (
+                (candidatos[0] or {})
+                .get("content", {})
+                or {}
+            ).get("parts", []) or []
+
+            for parte in partes:
+                texto += str(
+                    parte.get("text", "") or ""
+                )
+
+            texto = texto.strip()
 
             return texto or None
 
-        except requests.RequestException as erro:
-            logger.warning(
-                "🤖 Gemini falhou: %s",
-                type(erro).__name__,
-            )
-            return None
-        except (ValueError, KeyError, IndexError):
-            logger.warning(
-                "🤖 Gemini: resposta em formato inesperado"
-            )
-            return None
+        return None
 
     # ========================================================
     # CONTEXTO COMPACTO
@@ -254,7 +312,10 @@ class AnalistaIA:
         em_cache = self._do_cache(chave_cache)
 
         if em_cache:
-            return json.loads(em_cache)
+            try:
+                return json.loads(em_cache)
+            except json.JSONDecodeError:
+                pass
 
         prompt = (
             "Você é um revisor cético de sinais de apostas "

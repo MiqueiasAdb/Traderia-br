@@ -51,13 +51,15 @@ API2_KEY = os.getenv("API2_KEY", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 
 # Modelo do Gemini (gemini-2.0-flash tem tier gratuito).
+# Padrão: 3.1-flash-lite (rápido, gratuito e aceita
+# thinking off). Veja alternativas no seu /v1beta/models.
 GEMINI_MODELO = os.getenv(
     "GEMINI_MODELO",
-    "gemini-2.0-flash",
+    "gemini-3.1-flash-lite",
 ).strip()
 
 GEMINI_TIMEOUT = int(
-    os.getenv("GEMINI_TIMEOUT", "25")
+    os.getenv("GEMINI_TIMEOUT", "45")
 )
 
 # Revisão de sanidade antes do envio: on/off.
